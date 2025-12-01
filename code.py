@@ -849,7 +849,8 @@ def NMF_for_r_comparison(A, r, init, end, epochs):
         optimizer.zero_grad()
 
         WH = torch.matmul(F.relu(W), F.relu(H))  # Projection non-négative via ReLU
-        loss = torch.norm(Y_tensor - WH, p='fro')**2 # perte de Frobenius
+        loss = torch.norm(Y_tensor - WH, p='fro')**2 + 0 * torch.sum(torch.abs(H))
+ # perte de Frobenius
 
         loss.backward()
         optimizer.step()
@@ -891,15 +892,20 @@ def NMF_for_r_comparison(A, r, init, end, epochs):
         return W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2
 
 
-def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2):
-    
+def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2,
+                     image_shape=(3,64,64), X=None):
+
     # --- Conversion CPU + numpy si nécessaire
     if isinstance(W, torch.Tensor):
         W = W.detach().cpu().numpy()
     if isinstance(H, torch.Tensor):
         H = H.detach().cpu().numpy()
+    if isinstance(X, torch.Tensor):
+        X = X.detach().cpu().numpy()
 
-    # --- FIGURE : Heatmaps W et H
+    # =====================
+    # FIGURE 1 : Heatmaps
+    # =====================
     plt.figure(figsize=(14, 6))
 
     # Heatmap W
@@ -920,37 +926,179 @@ def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2):
 
     plt.tight_layout()
 
-    # --- FIGURE 2 : Courbes individuelles ---
+    # ==========================
+    # FIGURE 2 : Courbes
+    # ==========================
     plt.figure(figsize=(14, 8))
 
-    plt.subplot(3, 2, 1)
-    plt.plot(errorsGD)
-    plt.title("errorsGD")
-    plt.grid(True)
+    titles = ["errorsGD", "rankGD", "nuclearrankGD", "SVGD1", "SVGD2"]
+    data   = [errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2]
 
-    plt.subplot(3, 2, 2)
-    plt.plot(rankGD)
-    plt.title("rankGD")
-    plt.grid(True)
-
-    plt.subplot(3, 2, 3)
-    plt.plot(nuclearrankGD)
-    plt.title("nuclearrankGD")
-    plt.grid(True)
-
-    plt.subplot(3, 2, 4)
-    plt.plot(SVGD1)
-    plt.title("SVGD1")
-    plt.grid(True)
-
-    plt.subplot(3, 2, 5)
-    plt.plot(SVGD2)
-    plt.title("SVGD2")
-    plt.grid(True)
+    for i, (title, y) in enumerate(zip(titles, data)):
+        plt.subplot(3, 2, i+1)
+        plt.plot(y)
+        plt.title(title)
+        plt.grid(True)
 
     plt.tight_layout()
+
+    # ===========================================
+    # FIGURE 3 : Images correspondant à H
+    # ===========================================
+    num_components = H.shape[0]
+
+    n_cols = 8
+    n_rows = int(np.ceil(num_components / n_cols))
+
+    plt.figure(figsize=(2*n_cols, 2*n_rows))
+
+    for i in range(num_components):
+        comp = H[i]
+        if comp.size != np.prod(image_shape):
+            continue  # ignore si reshape impossible
+
+        img_array = comp.reshape(image_shape).transpose(1,2,0)
+
+        plt.subplot(n_rows, n_cols, i+1)
+        plt.imshow(img_array)
+        plt.axis("off")
+        plt.title(f"H[{i}]", fontsize=8)
+
+    plt.suptitle("Reconstruction des lignes de H", fontsize=16)
+    plt.tight_layout()
+
+    # ==================================================
+    # FIGURE 4 (optionnelle) : images du dataset X
+    # ==================================================
+    if X is not None:
+        max_imgs = min(100, X.shape[0])
+        n_cols = 8
+        n_rows = int(np.ceil(max_imgs / n_cols))
+        plt.figure(figsize=(2*n_cols, 2*n_rows))
+
+        for i in range(100, 200):
+            comp = X[i]
+            if comp.size != np.prod(image_shape):
+                continue
+
+            img_array = comp.reshape(image_shape).transpose(1,2,0)
+
+            plt.subplot(n_rows, n_cols, i+1)
+            plt.imshow(img_array)
+            plt.axis("off")
+            plt.title(f"img {i}", fontsize=8)
+
+        plt.suptitle("Images du dataset X", fontsize=16)
+        plt.tight_layout()
+
     plt.show()
 
+def safe_subplot(index, total, n_cols=8):
+    """
+    Calcule automatiquement le subplot sans jamais dépasser la grille.
+    """
+    n_rows = int(np.ceil(total / n_cols))
+    return n_rows, n_cols, index+1
+
+
+def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2,
+                     image_shape=(3,64,64), X=None):
+
+    # --- Convertir torch -> numpy si nécessaire
+    if isinstance(W, torch.Tensor): W = W.detach().cpu().numpy()
+    if isinstance(H, torch.Tensor): H = H.detach().cpu().numpy()
+    if isinstance(X, torch.Tensor): X = X.detach().cpu().numpy()
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # ==========================================================
+    # FIGURE 1 : Heatmaps W et H
+    # ==========================================================
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.title("Heatmap W")
+    plt.imshow(W, aspect="auto", cmap="viridis")
+    plt.colorbar()
+
+    plt.subplot(1, 2, 2)
+    plt.title("Heatmap H")
+    plt.imshow(H, aspect="auto", cmap="viridis")
+    plt.colorbar()
+
+    plt.tight_layout()
+
+
+    # ==========================================================
+    # FIGURE 2 : Courbes de suivi
+    # ==========================================================
+    plt.figure(figsize=(12, 8))
+
+    plots = [errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2]
+    titles = ["errorsGD", "rankGD", "nuclearrankGD", "SVGD1", "SVGD2"]
+
+    for i, (t, y) in enumerate(zip(titles, plots)):
+        plt.subplot(3, 2, i+1)
+        plt.plot(y)
+        plt.title(t)
+        plt.grid(True)
+
+    plt.tight_layout()
+
+
+    # ==========================================================
+    # FIGURE 3 : Composantes NMF (= lignes de H) reconstruites en images
+    # ==========================================================
+    num_H = H.shape[0]
+    n_cols = 8
+    n_rows = int(np.ceil(num_H / n_cols))
+
+    plt.figure(figsize=(2*n_cols, 2*n_rows))
+
+    for i in range(num_H):
+        comp = H[i]
+
+        # reshape en image
+        img = comp.reshape(image_shape).transpose(1, 2, 0)
+
+        # clamp pour éviter le warning "Clipping input data"
+        img = np.clip(img, 0, 1)
+
+        plt.subplot(n_rows, n_cols, i+1)
+        plt.imshow(img)
+        plt.axis("off")
+        plt.title(f"H[{i}]", fontsize=7)
+
+    plt.suptitle("Images reconstruites depuis H", fontsize=14)
+    plt.tight_layout()
+
+
+    # ==========================================================
+    # FIGURE 4 : Images d'entrée X (optionnelles)
+    # ==========================================================
+    if X is not None:
+        num_X = min(150, X.shape[0])  # éviter 1000 images en grille…
+        n_cols = 8
+        n_rows = int(np.ceil(num_X / n_cols))
+
+        plt.figure(figsize=(2*n_cols, 2*n_rows))
+
+        for i in range(num_X):
+            comp = X[i]
+
+            img = comp.reshape(image_shape).transpose(1, 2, 0)
+            img = np.clip(img, 0, 1)
+
+            plt.subplot(n_rows, n_cols, i+1)
+            plt.imshow(img)
+            plt.axis("off")
+            plt.title(f"X[{i}]", fontsize=7)
+
+        plt.suptitle("Images originales X", fontsize=14)
+        plt.tight_layout()
+
+    plt.show()
 
 
 
@@ -2411,23 +2559,56 @@ def BenchmarkDNMF(epochs, r1, r2):
     plot_best_distributions_table(a)
     plot_aligned_similarities_with_fit(ListeW21[0], ListeW21, 100, "Deep NMF")
 
-
-def save_all_matplotlib_plots(output_dir="all_plots"):
+def save_nmf_components(H, output_dir="nmf_components", image_shape=(3,64,64)):
     """
-    Sauvegarde tous les plots matplotlib actuellement en mémoire dans un dossier.
+    Sauvegarde les composantes NMF comme images.
+    
+    Args:
+        H (np.ndarray): matrice NMF (num_components, D)
+        output_dir (str): dossier pour sauvegarder les images
+        image_shape (tuple): forme originale des images (C,H,W)
     """
     os.makedirs(output_dir, exist_ok=True)
-    figures = [plt.figure(n) for n in plt.get_fignums()]
+    
+    num_components = H.shape[0]
+    
+    for i, comp in enumerate(H):
+        img_array = comp.reshape(image_shape).transpose(1,2,0)  # C,H,W -> H,W,C
+        plt.figure()
+        plt.imshow(img_array)
+        plt.axis("off")
+        path = os.path.join(output_dir, f"nmf_component_{i+1}.png")
+        plt.savefig(path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved NMF component: {path}")
+    
+    print(f"✅ {num_components} NMF component(s) saved to '{output_dir}'")
 
-    for i, fig in enumerate(figures):
-        path = os.path.join(output_dir, f"plot_{i+1}.png")
-        fig.savefig(path, dpi=300, bbox_inches='tight')
-        print(f"Saved: {path}")
-
-    print(f"✅ {len(figures)} plot(s) saved to '{output_dir}'")
-save_all_matplotlib_plots("C:/Users/thoma/Desktop/NMF Graphiques/NMF on Cancer/Statistics on Deep NMF Cancer Data Random Inits")
 
 plt.show()
-W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2 = NMF_for_r_comparison(X[:100, :], 10, 'random', 'all', 10)
+W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2 = NMF_for_r_comparison(X[100:150, :], 10, 'random', 'all', 3500)
 
-plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2)
+plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2, (3,64,64), X)
+save_nmf_components(H)
+# Transformation : juste redimensionnement pour visualisation
+transform = transforms.Compose([
+    transforms.Resize((64, 64))  # redimensionnement seulement
+])
+
+# Charger le dataset
+dataset = datasets.Flowers102(
+    root="./data",
+    split="train",
+    download=True,
+    transform=transform
+)
+
+# Afficher 5 images
+for i in range(5):
+    img, label = dataset[i]  # img est un PIL Image ici
+    img_np = np.array(img)   # PIL -> numpy array HxWxC
+    plt.figure()
+    plt.imshow(img_np)
+    plt.title(f"Label: {label}")
+    plt.axis("off")
+    plt.show()
