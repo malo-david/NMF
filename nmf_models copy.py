@@ -206,6 +206,17 @@ def Deep_NMF_Article(
                 err = torch.norm(A_tensor - WH, p="fro") ** 2
                 rel_err = (err / fro_Y).item()
 
+                errorsGD.append(rel_err)
+                fullerrorsGD.append(err.item())
+
+                epochs_metrics.append(epoch)
+                rankGD.append(exp_effective_rank_torch(WH))
+                nuclearrankGD.append(nuclear_over_operator_norm_torch(WH))
+
+                s = torch.linalg.svdvals(WH.detach().cpu())
+                SVGD1.append(s[0].item())
+                SVGD2.append(s[1].item() if s.numel() > 1 else 0.0)
+
         # ---------- Snapshots ----------
         if (
             save_dir is not None
@@ -241,5 +252,3 @@ def Deep_NMF_Article(
             SVGD2,
             epochs_metrics
         )
-    elif end == "light":
-        return W1, W2, H_mid, H_out, errorsGD, epochs_metrics
