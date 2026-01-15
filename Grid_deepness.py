@@ -163,7 +163,7 @@ def main():
     # ------------------------- CONFIG SWEEP -------------------------
     # Tu peux ajuster ces listes librement.
     x_train_list = [2000]      # tailles de X_train testées
-    epochs_list  = [40000]      # epochs testées
+    epochs_list  = [100000]      # epochs testées
 
     r_list = [60, 40, 30, 20, 10]   # listes de rangs profonds testées
 
@@ -191,7 +191,7 @@ def main():
 
     results = []
 
-    snapshot_every  = 200
+    snapshot_every  = 500
     
 
     # ------------------------- SWEEP -------------------------
@@ -209,11 +209,11 @@ def main():
 
                 
                 
-                r_l = [D] + r_list[:i]
+                r_l = [D] + r_list[-i:]
                 print(f"\n-- Deep NMF with r_list={r_l}, epochs={epochs} --")
 
                 run_idx += 1
-                r_tag = "x".join(map(str, r_list[:i]))
+                r_tag = "x".join(map(str, r_list[-i:]))
                 run_name = f"x{x_n}_e{epochs}_r{r_tag}_init{init}_{run_time}"
                 print(f"\n[{run_idx}/{total_runs}] {run_name}")
 
@@ -242,7 +242,7 @@ def main():
                 # ------------------------- VISUALISATIONS -------------------------
                 W_prod = prod_Ws(Ws, nonneg=True)
 
-                plot_nmf_results(W_prod, H, errorsGD_s, rankGD, nuclearrankGD, SVGD1, SVGD2, (3,28,28), X, epochs_metrics=epochs_metrics_s)
+                plot_nmf_results(W_prod, H, errorsGD_s, rankGD, nuclearrankGD, SVGD1, SVGD2, (3,28,28), X, epochs_metrics=epochs_metrics_s,limit=epochs)
                 plot_H_signatures(H, "deep", image_shape=(28, 28), n_show=H.shape[0])
                 plot_mnist_reconstruction_toN(X_train, Ws, H, index=0, image_shape=(28, 28))
 

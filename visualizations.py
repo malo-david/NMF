@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 
 def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD,
-                     SVGD1, SVGD2, image_shape=(64, 64), X=None, epochs_metrics=None):
+                     SVGD1, SVGD2, image_shape=(64, 64), X=None, epochs_metrics=None, limit=30000):
     """
     Affiche les heatmaps W et H + courbes de suivi
     """
@@ -41,24 +41,24 @@ def plot_nmf_results(W, H, errorsGD, rankGD, nuclearrankGD,
         if epochs_metrics is None:
             if t == "errorsGD":
                 plt.semilogy(y)             # log scale pour l'erreur
-                plt.xlim(right=30000)
+                plt.xlim(right=limit)
 
             else:    
                 plt.plot(y)                    # fallback (pas exact)
-                plt.xlim(right=30000)
+                plt.xlim(right=limit)
 
         else:
             # x = epochs où les métriques ont été calculées
             x = np.asarray(epochs_metrics)
 
             # ne garder que les points après 20000 epochs
-            mask = x <= 30000
+            mask = x <= limit
 
             if t == "errorsGD":
                 plt.semilogy(x[mask], np.asarray(y)[mask])  # log scale pour l'erreur
             else:
                 plt.plot(x[mask], np.asarray(y)[mask])
-            plt.xlim(right=30000)
+            plt.xlim(right=limit)
 
         plt.title(t)
         plt.grid(True)
