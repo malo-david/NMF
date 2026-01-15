@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 from metrics import exp_effective_rank_torch, nuclear_over_operator_norm_torch, cosine_separation_loss
@@ -9,7 +10,20 @@ from metrics import exp_effective_rank_torch, nuclear_over_operator_norm_torch, 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def Deep_NMF_2W(A, r1, r2, init='random', end='matrix', epochs=6000, seed=None, save_dir=None, snapshot_every=None):
+def Deep_NMF_2W(
+    A,
+    r1,
+    r2,
+    init="random",
+    end="matrix",
+    epochs=6000,
+    seed=None,
+    save_dir=None,
+    snapshot_every=None,
+    lr=1e-2,
+    l1_lambda=0.3,
+    l1_cos=0.0
+):
     """
     Deep NMF avec 2 couches W : A ≈ W1 @ W2 @ H
     """
@@ -23,10 +37,10 @@ def Deep_NMF_2W(A, r1, r2, init='random', end='matrix', epochs=6000, seed=None, 
         m, n = np.shape(A)
 
 
-    lr = 1e-2
 
     if isinstance(A, pd.DataFrame):
         A = A.to_numpy()
+        m, n = A.shape
     
     A_tensor = torch.tensor(A, dtype=torch.float32).to(device)
 
@@ -50,11 +64,7 @@ def Deep_NMF_2W(A, r1, r2, init='random', end='matrix', epochs=6000, seed=None, 
     errorsGD, nuclearrankGD, fullerrorsGD, rankGD = [], [], [], []
     SVGD1, SVGD2 = [], []
 
-    epochs_metrics = []
 
-    fro_Y = torch.norm(A_tensor, p='fro') ** 2 
-
-    metric_every = max(1, epochs // 100)
     
     if snapshot_every is None:
         snapshot_every = 0  # 0 = désactivé
@@ -67,50 +77,36 @@ def Deep_NMF_2W(A, r1, r2, init='random', end='matrix', epochs=6000, seed=None, 
 
         # Reconstruction via W1 * W2 * H
         WH = F.relu(W1) @ F.relu(W2) @ F.relu(H)
-        l1_lambda = 0.3
-        l1_cos = 0.00
         loss = torch.norm(A_tensor - WH, p='fro')**2 + l1_lambda * torch.norm(W1, p = 1) + l1_cos * cosine_separation_loss(H)
 
         loss.backward()
         optimizer.step()
 
         with torch.no_grad():
-            # Clamp (optionnel, au cas où relu ne suffit pas)
-            W1.clamp_(min=1e-2)
-            W2.clamp_(min=1e-2)
-            H.clamp_(min=1e-2)
-            WH_detached = F.relu(W1) @ F.relu(W2) @ F.relu(H)
-            rel_error = (torch.norm(A_tensor - WH_detached, p='fro') ** 2 / fro_Y).item()
-            error = (torch.norm(A_tensor - WH_detached, p='fro') ** 2).item()
+            W1.clamp_(min=0.0)
+            W2.clamp_(min=0.0)
+            H.clamp_(min=0.0)
 
-            errorsGD.append(rel_error)
-            fullerrorsGD.append(error)
-
-            if epoch % metric_every == 0 or epoch == epochs - 1:
-                epochs_metrics.append(epoch)
-                rankGD.append(exp_effective_rank_torch(WH_detached))
-                nuclearrankGD.append(nuclear_over_operator_norm_torch(WH_detached))
-                if epoch % 1000 == 0 or epoch == epochs - 1:
-                    print(f"Époque {epoch},  erreur relative : {rel_error:.4f}, norme A : {torch.norm(A_tensor, p='fro') ** 2:.4f}, norme WH : {torch.norm(WH_detached, p='fro') ** 2:.4f}")
-
-                s = torch.linalg.svdvals(WH_detached)
-                SVGD1.append(s[0].item())
-                SVGD2.append(s[1].item() if s.numel() > 1 else 0.0)
-
-            # ----- Snapshot de H pour plot signatures -----
-            if save_dir is not None and snapshot_every and (epoch % snapshot_every == 0 or epoch == epochs - 1):
-                # on sauve H en CPU pour éviter GPU->CPU plus tard
-                torch.save(
-                    {"epoch": epoch, "H": H.detach().cpu()},
-                    os.path.join(save_dir, f"H_epoch_{epoch:06d}.pt")
-                )
+        # ---------- Snapshots ----------
+        if (
+            save_dir is not None
+            and snapshot_every > 0
+            and (epoch % snapshot_every == 0 or epoch == epochs - 1)
+        ):
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "W1": W1.detach().cpu(),
+                    "W2": W2.detach().cpu(),
+                    "H_out": H.detach().cpu(),
+                },
+                os.path.join(save_dir, f"snapshot_{epoch:06d}.pt"),
+            )
 
     if end == 'lists':
         return W2, H, errorsGD, rankGD, SVGD1, SVGD2
     elif end == 'matrix':
         return W1, W2, H
-    elif end == 'all':
-        return W1, W2, H, errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2, epochs_metrics
 
 
 def Deep_NMF_Article(
@@ -195,16 +191,10 @@ def Deep_NMF_Article(
         optimizer.step()
 
         with torch.no_grad():
-            if epoch % metric_every == 0 or epoch == epochs - 1:
-                W1.clamp_(min=0.0)
-                W2.clamp_(min=0.0)
-                H_mid.clamp_(min=0.0)
-                H_out.clamp_(min=0.0)
-
-                WH = F.relu(W1) @ F.relu(W2) @ F.relu(H_out)
-
-                err = torch.norm(A_tensor - WH, p="fro") ** 2
-                rel_err = (err / fro_Y).item()
+            W1.clamp_(min=0.0)
+            W2.clamp_(min=0.0)
+            H_mid.clamp_(min=0.0)
+            H_out.clamp_(min=0.0)
 
         # ---------- Snapshots ----------
         if (
@@ -243,3 +233,98 @@ def Deep_NMF_Article(
         )
     elif end == "light":
         return W1, W2, H_mid, H_out, errorsGD, epochs_metrics
+
+
+def Deep_NMF_2W_toN(
+    A,
+    init="random",
+    end="matrix",
+    epochs=6000,
+    seed=None,
+    save_dir=None,
+    snapshot_every=None,
+    lr=1e-2,
+    r_list=[]
+):
+    """
+    Deep NMF avec 2 couches W : A ≈ W1 @ W2 @ H
+    """
+
+    if seed is not None:
+        import random
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        m, n = np.shape(A)
+
+
+
+    if isinstance(A, pd.DataFrame):
+        A = A.to_numpy()
+        m, n = A.shape
+    
+    A_tensor = torch.tensor(A, dtype=torch.float32).to(device)
+
+    if init == 'random':
+        Ws = nn.ParameterList()
+        for i in range(len(r_list) - 1):
+            Ws.append(
+                nn.Parameter(torch.rand((r_list[i], r_list[i+1]), device=device))
+            )
+        H = nn.Parameter(torch.rand((r_list[-1], n), device=device))
+        #print(H)
+        #print(W1)
+
+    optimizer = torch.optim.Adam(
+        list(Ws.parameters()) + [H],
+        lr=lr
+    )
+
+    errorsGD, nuclearrankGD, fullerrorsGD, rankGD = [], [], [], []
+    SVGD1, SVGD2 = [], []
+
+
+    
+    if snapshot_every is None:
+        snapshot_every = 0  # 0 = désactivé
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+    for epoch in tqdm(range(epochs)):
+        optimizer.zero_grad()
+
+        # Reconstruction via W1 * W2 * H
+        WH = F.relu(Ws[0])
+        for W in Ws[1:]:
+            WH = WH @ F.relu(W)
+        WH = WH @ F.relu(H)
+
+        loss = torch.norm(A_tensor - WH, p='fro')**2 
+
+        loss.backward()
+        optimizer.step()
+
+        with torch.no_grad():
+            for W in Ws:
+                W.clamp_(min=0.0)
+            H.clamp_(min=0.0)
+
+        # ---------- Snapshots ----------
+        if (
+            save_dir is not None
+            and snapshot_every > 0
+            and (epoch % snapshot_every == 0 or epoch == epochs - 1)
+        ):
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "Ws": [W.detach().cpu() for W in Ws],
+                    "H_out": H.detach().cpu()
+                },
+                os.path.join(save_dir, f"snapshot_{epoch:06d}.pt"),
+            )
+
+    if end == 'matrix':
+        return Ws, H

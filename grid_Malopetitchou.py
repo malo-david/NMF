@@ -18,6 +18,11 @@ from visualizations import (
     plot_mnist_reconstruction,
     plot_mnist_reconstruction_nmf
 )
+from metrics import (
+    exp_effective_rank_torch,
+    nuclear_over_operator_norm_torch,
+)
+
 
 import glob
 import torch
@@ -89,8 +94,12 @@ def pick_optimal(df, rel_tol=0.01):
     )
     return candidates.iloc[0], best
 
-def compute_metrics_from_snapshots(snap_dir, A):
-    A = torch.tensor(A, dtype=torch.float32)      # CPU
+def compute_metrics_from_snapshots(
+    snap_dir,
+    A,
+    eps=1e-12
+):
+    A = torch.tensor(A, dtype=torch.float32)  # CPU
     fro_Y = torch.norm(A, p="fro") ** 2
 
     epochs_metrics = []
@@ -108,31 +117,36 @@ def compute_metrics_from_snapshots(snap_dir, A):
         W2 = ckpt["W2"]
         H_out = ckpt["H_out"]
 
-        WH = F.relu(W1) @ F.relu(W2) @ F.relu(H_out)
+        # Non-négativité NMF
+        W1 = F.relu(W1)
+        W2 = F.relu(W2)
+        H_out = F.relu(H_out)
 
+        WH = W1 @ W2 @ H_out
+
+        # erreur relative
         err = torch.norm(A - WH, p="fro") ** 2
         rel_err = (err / fro_Y).item()
 
-        s = torch.linalg.svdvals(WH)  # CPU => stable (pas de cusolver fallback)
-        s_sum = s.sum()
-        op = s[0]
+        # métriques spectrales
+        eff_rank = exp_effective_rank_torch(WH, eps=eps)
+        nuclear_rank = nuclear_over_operator_norm_torch(WH)
 
-        # nuclear/operator
-        nuclearrank = (s_sum / (op + 1e-12)).item()
+        # singular values (pour logging)
+        s = torch.linalg.svdvals(WH)
+        sv1 = s[0].item()
+        sv2 = s[1].item() if s.numel() > 1 else 0.0
 
-        # effective rank = exp(entropy)
-        p = s / (s_sum + 1e-12)
-        ent = -(p * torch.log(p + 1e-12)).sum()
-        eff_rank = torch.exp(ent).item()
-
+        # stockage
         epochs_metrics.append(epoch)
         errorsGD.append(rel_err)
         rankGD.append(eff_rank)
-        nuclearrankGD.append(nuclearrank)
-        SVGD1.append(s[0].item())
-        SVGD2.append(s[1].item() if s.numel() > 1 else 0.0)
+        nuclearrankGD.append(nuclear_rank)
+        SVGD1.append(sv1)
+        SVGD2.append(sv2)
 
     return errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2, epochs_metrics
+
 
 def main():
     # ------------------------- CONFIG SWEEP -------------------------
@@ -140,8 +154,8 @@ def main():
     x_train_list = [2000]      # tailles de X_train testées
     epochs_list  = [50000]      # epochs testées
 
-    r1_list = [10, 20, 40, 60]
-    r2_list = [5, 10, 20, 30]
+    r1_list = [10, 20, 40]
+    r2_list = [5, 10, 20]
     lambda_l1 = 1
     lambda_l2_list = [0.1, 1, 10]
 
@@ -154,7 +168,7 @@ def main():
     X, dataset = load_mnist(resize=(28, 28))
 
     # ------------------------- SHUFFLE REPRODUCTIBLE -------------------------
-    seed = 112 # Pour avoir un 9 en reconstruction
+    seed = 112 # Pour avoir un 7 en reconstruction
 
     rng = np.random.default_rng(seed)
 
@@ -175,7 +189,12 @@ def main():
     
 
     # ------------------------- SWEEP -------------------------
-    total_runs = len(x_train_list) * len(epochs_list) * len(r1_list) * len(r2_list) * len(lambda_l2_list)
+    total_runs = 0
+    for r1 in r1_list:
+        for r2 in r2_list:
+            if r2 <= r1:
+                total_runs += 1
+    total_runs *= len(x_train_list) * len(epochs_list) * len(lambda_l2_list)
     run_idx = 0
 
     for x_n in x_train_list:
@@ -198,12 +217,12 @@ def main():
 
                         # ----------------- TRAIN -----------------
                         start = time.perf_counter()
-                        W1, W2, H_mid, H_out, errorsGD, epochs_metrics= Deep_NMF_Article(
+                        W1, W2, H_mid, H_out= Deep_NMF_Article(
                             X_train,
                             r1=r1,
                             r2=r2,
                             init=init,
-                            end="light",
+                            end="matrix",
                             epochs=epochs,
                             seed=seed,
                             save_dir=snap_dir,
@@ -213,7 +232,7 @@ def main():
                         )
                         seconds = time.perf_counter() - start
 
-                        final_error = float(errorsGD[-1]) if len(errorsGD) else np.nan
+                        
 
                         errorsGD_s, rankGD, nuclearrankGD, SVGD1, SVGD2, epochs_metrics_s = compute_metrics_from_snapshots(snap_dir, X_train)
 
@@ -258,8 +277,10 @@ def main():
                         )
                         plt.close("all")
 
+                        final_error = float(errorsGD_s[-1]) if len(errorsGD_s) else np.nan
+
                         logs = {
-                            "errorsGD": errorsGD,
+                            "errorsGD": errorsGD_s,
                             "rankGD": rankGD,
                             "nuclearrankGD": nuclearrankGD,
                             "SVGD1": SVGD1,
