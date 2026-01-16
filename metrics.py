@@ -2,8 +2,9 @@ import torch
 
 def exp_effective_rank_torch(A, eps=1e-12):
     """
-    Calcule l'effective rank exponentiel d'une matrice
+    Compute the exponential effective rank of a matrix.
     """
+
     S = torch.linalg.svdvals(A)
     S = S[S > eps]
     
@@ -15,7 +16,7 @@ def exp_effective_rank_torch(A, eps=1e-12):
 
 def nuclear_over_operator_norm_torch(A):
     """
-    Ratio: norme nucléaire / norme opérateur
+    Ratio: nuclear norm / operator norm
     """
     s = torch.linalg.svdvals(A)
     nuclear_norm = s.sum()
@@ -25,7 +26,7 @@ def nuclear_over_operator_norm_torch(A):
 
 def cosine_separation_loss(H, eps=1e-8):
     """
-    Pénalité pour encourager l'orthogonalité des lignes de H
+    PPenalty to encourage orthogonality of rows of H
     """
     Hn = H / (torch.norm(H, dim=1, keepdim=True) + eps)
     G = Hn @ Hn.T

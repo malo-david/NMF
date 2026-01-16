@@ -9,7 +9,7 @@ import shutil
 import torch.nn.functional as F
 import glob
 
-# Tes modules
+# Project modules
 from data_loader import load_mnist
 from nmf_models import Deep_NMF_2W_toN
 
@@ -30,7 +30,7 @@ import torch
 import matplotlib.pyplot as plt
 
 def to_numpy(x):
-    """Torch Tensor (CPU/GPU) -> numpy, sinon retourne tel quel."""
+    """Torch Tensor (CPU/GPU) -> numpy, otherwise return as is."""
     try:
         import torch
         if isinstance(x, torch.Tensor):
@@ -41,10 +41,11 @@ def to_numpy(x):
 
 def save_run_toN(out_dir, run_name, Ws, H, logs, meta):
     """
-    Sauve:
-      - facteurs profonds Ws = [W0, W1, ..., W_{L-1}]
-      - facteur final H
-      - logs (errorsGD, rankGD, nuclearrankGD, SVGD1, SVGD2)
+    Save a Deep NMF run to a compressed .npz file.
+    Contains :
+      - list of matrices Ws
+      - final factor H
+      - logs (errors, ranks, etc.)
       - meta (params, temps, etc.)
     """
     os.makedirs(out_dir, exist_ok=True)
@@ -68,8 +69,8 @@ def save_run_toN(out_dir, run_name, Ws, H, logs, meta):
 
 def save_all_figures(base_dir):
     """
-    Sauvegarde toutes les figures matplotlib ouvertes
-    dans un dossier horodaté.
+    Save all open matplotlib figures to the specified directory.
+    Returns the directory where figures were saved.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_dir = os.path.join(base_dir, timestamp)
@@ -120,20 +121,20 @@ def compute_metrics_from_snapshots_toN(
 
         WH = W_prod @ H_pos
 
-        # erreur relative
+        # relative error
         err = torch.norm(A - WH, p="fro") ** 2
         rel_err = (err / fro_Y).item()
 
-        # métriques spectrales
+        # spectral metrics
         eff_rank = exp_effective_rank_torch(WH, eps=eps)
         nuclear_rank = nuclear_over_operator_norm_torch(WH)
 
-        # singular values (pour logging)
+        # singular values (for logging)
         s = torch.linalg.svdvals(WH)
         sv1 = s[0].item() if s.numel() > 0 else 0.0
         sv2 = s[1].item() if s.numel() > 1 else 0.0
 
-        # stockage
+        # Append to lists
         epochs_metrics.append(epoch)
         errorsGD.append(rel_err)
         rankGD.append(eff_rank)
@@ -161,27 +162,27 @@ def plot_mnist_reconstruction_toN(A, Ws, H, index=0, image_shape=(28, 28)):
 
 def main():
     # ------------------------- CONFIG SWEEP -------------------------
-    # Tu peux ajuster ces listes librement.
-    x_train_list = [2000]      # tailles de X_train testées
-    epochs_list  = [100000]      # epochs testées
+    # Is the deepness sweep
+    x_train_list = [2000]      # Is the deepness sweep
+    epochs_list  = [100000]      # Tested number of epochs
 
     r_list = [60, 40, 30, 20, 10]   # listes de rangs profonds testées
 
 
     init = "random"
-    rel_tol_for_optimal = 0.01            # 1% de la meilleure erreur = "aussi bon"
+    
 
     model_tag = "DeepNMF_2W_deepness"
     # ------------------------- DATA -------------------------
     X, dataset = load_mnist(resize=(28, 28))
 
     # ------------------------- SHUFFLE REPRODUCTIBLE -------------------------
-    seed = 112 # Pour avoir un 7 en reconstruction
+    seed = 112 # To have 7 as the reproduction image
     rng = np.random.default_rng(seed)
 
     perm = rng.permutation(X.shape[0])
-    X = X[perm]   # on remplace X par sa version shuffled
-
+    X = X[perm]   # Reproducible shuffle
+    
     # ------------------------- OUTPUT DIR -------------------------
     out_dir = os.path.join("./sweeps", model_tag)
     os.makedirs(out_dir, exist_ok=True)
@@ -306,7 +307,7 @@ def main():
                     "npz": saved_path
                 })
 
-                # Nettoyage snapshots
+                # Cleanup snapshot directory
                 shutil.rmtree(snap_dir)
 
     # ------------------------- SUMMARY + OPTIMAL -------------------------

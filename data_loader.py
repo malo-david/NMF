@@ -3,7 +3,8 @@ from torchvision import datasets, transforms
 
 def load_mnist(resize=(28, 28)):
     """
-    Charge MNIST et retourne la matrice X pour NMF
+    Load the MNIST dataset and return the data matrix X for NMF.
+
     """
     transform = transforms.Compose([
         transforms.Resize(resize),
@@ -28,7 +29,7 @@ def load_mnist(resize=(28, 28)):
 
 def load_flowers102(resize=(64, 64)):
     """
-    Charge Flowers102 et retourne la matrice X pour NMF
+    Load Flowers102 and return the data matrix X for NMF
     """
     transform = transforms.Compose([
         transforms.Resize(resize),

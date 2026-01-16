@@ -25,7 +25,7 @@ def Deep_NMF_2W(
     l1_cos=0.0
 ):
     """
-    Deep NMF avec 2 couches W : A ≈ W1 @ W2 @ H
+    Deep NMF with two W layers: A ≈ W1 @ W2 @ H.
     """
 
     if seed is not None:
@@ -79,6 +79,8 @@ def Deep_NMF_2W(
         WH = F.relu(W1) @ F.relu(W2) @ F.relu(H)
         loss = torch.norm(A_tensor - WH, p='fro')**2 + l1_lambda * torch.norm(W1, p = 1) + l1_cos * cosine_separation_loss(H)
 
+        #Penalty term encouraging orthogonality between rows of H.
+
         loss.backward()
         optimizer.step()
 
@@ -126,8 +128,8 @@ def Deep_NMF_Article(
     """
     Deep NMF Article (2W + 2H)
     Optimisation :
-        ||A - ReLU(W1) @ H_mid||_F^2
-      + ||H_mid - W2 @ H_out||_F^2
+        ||A - ReLU(W1) @ ReLU(H_mid)||_F^2
+      + ||ReLU(H_mid) - ReLU(W2) @ ReLU(H_out)||_F^2
     """
 
     # ---------- Seed ----------
@@ -183,8 +185,8 @@ def Deep_NMF_Article(
         optimizer.zero_grad()
 
         loss = (
-            lambda_l1 * torch.norm(A_tensor - F.relu(W1) @ H_mid, p="fro") ** 2
-            + lambda_l2 * torch.norm(H_mid - W2 @ H_out, p="fro") ** 2
+            lambda_l1 * torch.norm(A_tensor - F.relu(W1) @ F.relu(H_mid), p="fro") ** 2
+            + lambda_l2 * torch.norm(F.relu(H_mid) - F.relu(W2) @ F.relu(H_out), p="fro") ** 2
         )
 
         loss.backward()
@@ -247,7 +249,7 @@ def Deep_NMF_2W_toN(
     r_list=[]
 ):
     """
-    Deep NMF avec 2 couches W : A ≈ W1 @ W2 @ H
+    Deep NMF with two W layers: A ≈ W1 @ W2 @ H
     """
 
     if seed is not None:
