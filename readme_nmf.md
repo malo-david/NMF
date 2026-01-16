@@ -18,12 +18,13 @@ A central objective is to study the low-rank bias phenomenon — the tendency of
 ## Project Structure
 
 nmf_project/
-├── data_loader.py       # Dataset loading (MNIST, Flowers102)
-├── metrics.py           # Metrics (effective rank, nuclear norm, etc.)
-├── nmf_models.py        # NMF and Deep NMF models
-├── visualizations.py    # Visualization and plotting utilities
-├── experiments.py       # Main experiment orchestration script
-└── readme_nmf.md        # This file
+|-- data_loader.py        # Dataset loading (MNIST, Flowers102)
+|-- metrics.py            # Metrics (effective rank, nuclear norm, etc.)
+|-- nmf_models.py         # NMF and Deep NMF models
+|-- visualizations.py     # Visualization and plotting utilities
+|-- experiments.py        # Main experiment orchestration script
+`-- readme_nmf.md         # This file
+
 
 ## File Descriptions
 
