@@ -33,7 +33,7 @@ nmf_project/
   - Grid_layer_loss.py      # Grid search over layer-wise loss variants
 
   - recreation.py           # Reconstruction and visualization utilities
-  - readme_nmf.md           # Project README / documentation
+  - README.md               # Project README / documentation
 
 
 
