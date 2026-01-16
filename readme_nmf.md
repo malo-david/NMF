@@ -18,12 +18,23 @@ A central objective is to study the low-rank bias phenomenon — the tendency of
 ## Project Structure
 
 nmf_project/
-|-- data_loader.py        # Dataset loading (MNIST, Flowers102)
-|-- metrics.py            # Metrics (effective rank, nuclear norm, etc.)
-|-- nmf_models.py         # NMF and Deep NMF models
-|-- visualizations.py     # Visualization and plotting utilities
-|-- experiments.py        # Main experiment orchestration script
-`-- readme_nmf.md         # This file
+  - data_loader.py          # Dataset loading (MNIST, Flowers102)
+  - metrics.py              # Metrics: effective rank, nuclear norm, cosine loss
+  - nmf_models.py           # NMF, Deep NMF (2W, Article, to-N variants)
+  - visualizations.py       # Plots: heatmaps, signatures, reconstructions
+
+  - experiments.py          # Main experiment runner (basic experiments)
+  - experiments_deepness.py # Deep NMF depth sweep (r_list experiments)
+  - experiments_global_loss.py # Global loss / rank bias experiments
+  - experiments_layer_loss.py  # Layer-wise loss experiments
+
+  - Grid_deepness.py        # Grid search over Deep NMF depth
+  - Grid_global_loss.py     # Grid search over global loss variants
+  - Grid_layer_loss.py      # Grid search over layer-wise loss variants
+
+  - recreation.py           # Reconstruction and visualization utilities
+  - readme_nmf.md           # Project README / documentation
+
 
 
 ## File Descriptions
